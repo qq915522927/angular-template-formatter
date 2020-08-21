@@ -4,7 +4,7 @@ function formatElementName(name: string) {
     return name.replace(/^:svg:/, '');
 }
 
-export function format(src: string, indentation: number = 4, useSpaces: boolean = true, closeTagSameLine: boolean = false): string {
+export function format(src: string, indentation: number = 2, useSpaces: boolean = true, closeTagSameLine: boolean = false): string {
     const rawHtmlParser = new HtmlParser();
     const htmlParser = new I18NHtmlParser(rawHtmlParser);
     const expressionParser = new Parser(new Lexer());
@@ -16,6 +16,7 @@ export function format(src: string, indentation: number = 4, useSpaces: boolean 
     let pretty: string[] = [];
     let indent = 0;
     let attrNewLines = false;
+    let isFirstAttrbute = true;
 
     if(htmlResult.errors && htmlResult.errors.length > 0) {
         return src;
@@ -63,6 +64,10 @@ export function format(src: string, indentation: number = 4, useSpaces: boolean 
         return parseLocation.start.file.content.substring(parseLocation.start.offset, parseLocation.end.offset);
     }
 
+    function getSpaces(n: number) {
+        return ' '.repeat(n);
+    }
+
     let visitor: Visitor = {
         visitElement: function (element) {
             if (pretty.length > 0) {
@@ -70,8 +75,12 @@ export function format(src: string, indentation: number = 4, useSpaces: boolean 
             }
             pretty.push(getIndent(indent) + '<' + formatElementName(element.name));
             attrNewLines = element.attrs.length > 1 && element.name != 'link';
+            let attrContext = {
+                indent: getIndent(indent) + getSpaces(element.name.length + 2),
+            }
+            isFirstAttrbute = true;
             element.attrs.forEach(attr => {
-                attr.visit(visitor, {});
+                attr.visit(visitor, attrContext);
             });
             if (!closeTagSameLine && attrNewLines) {
                 pretty.push('\n' + getIndent(indent));
@@ -101,12 +110,19 @@ export function format(src: string, indentation: number = 4, useSpaces: boolean 
             console.error('IF YOU SEE THIS THE PRETTY PRINTER NEEDS TO BE UPDATED')
         },
         visitAttribute: function (attribute: Attribute, context: any) {
-            let prefix = attrNewLines ? '\n' + getIndent(indent + 1) : ' ';
+            // let prefix = attrNewLines ? '\n' + getIndent(indent + 1) : ' ';
+            let prefix;
+            if (isFirstAttrbute) {
+                prefix = ' ';
+            } else {
+                prefix = '\n' + context.indent
+            }
             pretty.push(prefix + attribute.name);
             if (attribute.value.length) {
                 const value = getFromSource(attribute.valueSpan);
                 pretty.push(`=${value.trim()}`);
             }
+            isFirstAttrbute = false;
         },
         visitComment: function (comment: Comment, context: any) {
             pretty.push('\n' + getIndent(indent) + '<!-- ' + comment.value.trim() + ' -->');
